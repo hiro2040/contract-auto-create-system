@@ -1,85 +1,94 @@
 /**
- * webページのHTMLの取得(cookie有,js有)
- *
- * @param url webページのURL
- * @param cookie_domain cookieのドメイン
- * @param cookie_name cookieの名前
- * @param cookie_value cookieの値
- * @return content webページのHTML
+ * 共通関数
  */
-function input_spread_def(sheet_name, start_col, end_col) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    const sheet = ss.getSheetByName(sheet_name);
+/**
+ * スプレッドシート情報の取得
+ *
+ * @param alertName エラーの際に出力する名前
+ * @param sheetName 取得対象のシート名
+ * @param startRow 取得開始行
+ * @param endCol 取得終了列
+ * @param url 取得するスプレッドシートのurl
+ * @return 取得したデータ
+ */
+function inputSpread(alertName, sheetName, startRow, endCol, url='') {
+  // urlが空の場合は本スプレッドシート、空でない場合は指定されたurlのスプレッドシート情報を取得
+  const spread = (url) ? SpreadsheetApp.openByUrl(url) : SpreadsheetApp.getActiveSpreadsheet();
 
-    let lastRow = sheet.getLastRow()-1;
+  // シート情報を取得
+  const sheet = spread.getSheetByName(sheetName);
 
-    return sheet.getRange(2, start_col, lastRow, end_col).getValues();
-  } catch(e) {
-    if(e.message === PropertiesService.getScriptProperties().getProperty('sheet_emp_msg')) {
-      return []
-    }
-  }
+  // 取得開始行からの取得データの行数を設定
+  const rowCount = (startRow == 1) ? sheet.getLastRow() : sheet.getLastRow()-startRow+1;
+  if(!rowCount) {
+    throw new Error(`${alertName}を記入してください。`)
+  } 
+
+  return sheet.getRange(startRow, 1, rowCount, endCol).getValues();
 }
 
-function input_spread_external(url, sheet_name, start_col, end_col) {
-  try {
-    const ss = SpreadsheetApp.openByUrl(url);
+/**
+ * 新規フォルダの作成
+ *
+ * @param name フォルダ名
+ * @return フォルダID
+ */
+function createFolder(folderName) {
+  // 新規作成したフォルダの情報を取得
+  const folder = DriveApp.getFolderById(outputInfo.rootFolderId).createFolder(folderName);
 
-    const sheet = ss.getSheetByName(sheet_name);
-
-    let lastRow = sheet.getLastRow()-1;
-
-    return sheet.getRange(2, start_col, lastRow, end_col).getValues();
-  } catch(e) {
-    if(e.message === PropertiesService.getScriptProperties().getProperty('sheet_emp_msg')) {
-      return []
-    }
-  }
+  return folder.getId()
 }
 
-// フォルダの作成
-function create_folder(name) {
-  var folder = DriveApp.getFolderById(ROOT_FOLDER_ID);
-  var house_folder = folder.createFolder(name);
-
-  return house_folder.getId()
-}
-
-function doc_read(sample_url) {
-  let doc = DocumentApp.openByUrl(sample_url);
-  return [doc, doc.getName()]
-}
-
-function doc_copy(sample_id, folder_id) {
-  let doc = DriveApp.getFileById(sample_id);
-  let folder = DriveApp.getFolderById(folder_id);
-  let newfile = doc.makeCopy(doc.getName().replace("ひな形",""), folder);
+/**
+ * ドキュメントのコピー
+ *
+ * @param sampleFileId サンプルファイルのID
+ * @param folderId 出力先フォルダID
+ * @return コピーしたファイルのurl
+ */
+function docCopy(sampleFileId, folderId) {
+  // サンプルファイルのドキュメント情報を取得
+  const doc = DriveApp.getFileById(sampleFileId);
+  // 出力先フォルダ情報を取得
+  const folder = DriveApp.getFolderById(folderId);
+  // 出力先フォルダにサンプルファイルをコピー
+  const newfile = doc.makeCopy(doc.getName().replace("ひな形",""), folder);
 
   return newfile.getUrl()
 }
 
+/**
+ * ドキュメントのデータを取得
+ *
+ * @param url ドキュメントのurl
+ * @return ドキュメントのデータ
+ */
 function openDoc(url){
   const basedoc = DocumentApp.openByUrl(url);
-
   return basedoc.getBody()
 }
 
-function replace_string(basebody) {
-  for(let i in BIND_STRING) {
-    basebody.replaceText(BIND_STRING[i][0],BIND_STRING[i][1])
-  }
-}
-
-function string_format(data) {
-  let type = Object.prototype.toString.call(data)
-  let format_data = data
-  if(type == '[object Date]') {
-    format_data = Utilities.formatDate(format_data, 'JST', 'yyyy/MM/dd')
-  } else if(type == '[object Number]') {
-    format_data = format_data.toLocaleString()
-  }
-
-  return format_data;
+/**
+ * リスト内のデータをすべてString型に変換する。
+ *
+ * @param list String型に変換するリスト
+ * @return content String型に変換後のリスト
+ */
+function toString(list) {
+  return list.map(rec => {
+    return rec.map(data => {
+      // データの型を取得
+      const type = Object.prototype.toString.call(data)
+      // 数値、日付をString型に変換
+      if(type == '[object Date]') {
+        return Utilities.formatDate(data, 'JST', 'yyyy/MM/dd')
+      } else if(type == '[object Number]') {
+        return data.toLocaleString()
+      } else {
+        return data
+      }
+    })
+  })
 }
